@@ -3,10 +3,33 @@ import boto3
 import time
 import requests
 import base64
-from PIL import Image
 import cv2
 import numpy as np
 import io
+import sys
+import tkinter
+from PIL import Image, ImageTk, ImageFile
+ImageFile.LOAD_TRUNCATED_IMAGES = True
+
+def showPIL(pilImage):
+    root = tkinter.Tk()
+    w, h = root.winfo_screenwidth(), root.winfo_screenheight()
+    root.overrideredirect(1)
+    root.geometry("%dx%d+0+0" % (w, h))
+    root.focus_set()    
+    root.bind("<Escape>", lambda e: (e.widget.withdraw(), e.widget.quit()))
+    canvas = tkinter.Canvas(root,width=w,height=h)
+    canvas.pack()
+    canvas.configure(background='black')
+    imgWidth, imgHeight = pilImage.size
+    if imgWidth > w or imgHeight > h:
+        ratio = min(w/imgWidth, h/imgHeight)
+        imgWidth = int(imgWidth*ratio)
+        imgHeight = int(imgHeight*ratio)
+        pilImage = pilImage.resize((imgWidth,imgHeight), Image.ANTIALIAS)
+    image = ImageTk.PhotoImage(pilImage)
+    imagesprite = canvas.create_image(w/2,h/2,image=image)
+    root.mainloop()
 
 
 def get_emotion(emotions):
@@ -22,7 +45,7 @@ def get_emotion(emotions):
 
 def get_tag(data):
     age = data['ageFrom']
-    if age < 30:
+    if age < 40:
         if data['eyeglassesNumber'] > 0:
             return 'eyeglassesYoung'
         if data['sunglassesNumber'] > 0:
@@ -49,16 +72,17 @@ def get_tag(data):
 def full_screen_catch(base):
     imgdata = base64.b64decode(base)
     image = Image.open(io.BytesIO(imgdata))
+    # showPIL(image)
     image.show()
 
 
 def make_request(data):
-    r = requests.post("http://localhost:3000/reports", data=data)
-    full_screen_catch(r.content.decode("utf-8"))
+    print(data)
+    r = requests.post("http://193.2.178.254:3000/reports", data=data)
+    full_screen_catch(r.content.decode("utf-8").split('base64,')[1])
 
 
 def detect():
-    imageFile = 'test.jpg'
     client = boto3.client('rekognition')
     cap = cv2.VideoCapture(0)
     retval, image = cap.read()
@@ -97,7 +121,6 @@ def detect():
                   'beard': label['Beard']['Value'],
                   'mustache': label['Mustache']['Value'],
                   }
-        print(result['gender'])
         ageFromTotal += result['ageFrom']
         ageToTotal += result['ageTo']
         data['emotional'] = get_emotion(label['Emotions'])
@@ -125,10 +148,12 @@ def detect():
 
     data['adTag'] = get_tag(data)
     make_request(data)
-    print(data)
 
 
 if __name__ == "__main__":
     while True:
+        # try:
         detect()
-        time.sleep(20)
+        # except:
+            # print('napaka')
+        time.sleep(5)
